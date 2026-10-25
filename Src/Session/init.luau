@@ -147,6 +147,7 @@ end
 
 function Session.load_config(dir)
     dir = dir or DATA_DIR
+    ensure_dir(dir)
     local path = dir .. "/config.json"
     local cfg
     local ok, content = read_file(path)

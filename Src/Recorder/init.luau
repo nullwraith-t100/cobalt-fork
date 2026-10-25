@@ -286,6 +286,7 @@ function Recorder:open_next()
     self.current_file = string.format("%s/%s", self.dir, name)
     self.current_bytes = 0
     self.current_lines = 0
+    ensure_dir(self.dir)
 
     -- arquivo existente = retomada, header já está lá
     local exists = false

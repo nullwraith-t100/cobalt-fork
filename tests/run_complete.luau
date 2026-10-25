@@ -27,9 +27,12 @@ if not ok2 then
     return warn("[complete] new falhou: " .. tostring(complete))
 end
 
-local ok3, res = pcall(function() return complete:start() end)
+local ok3, started, err = pcall(function() return complete:start() end)
 if not ok3 then
-    return warn("[complete] start falhou: " .. tostring(res))
+    return warn("[complete] start falhou (pcall): " .. tostring(started))
+end
+if not started then
+    return warn("[complete] start falhou: " .. tostring(err))
 end
 
 print("[complete] Cobalt Fork v2.4 iniciado. Sessao: " .. tostring(complete.main.session.session))
