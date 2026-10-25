@@ -53,11 +53,31 @@ function Complete:start()
 
     _G.Enrich = mods["Src/Enrich/init.luau"]
 
+    -- monta tabela de modulos com chaves curtas que Main.new reconhece
+    local short_name = {
+        ["Src/Enrich/init.luau"] = "Enrich",
+        ["Src/Session/init.luau"] = "Session",
+        ["Src/Scanner/init.luau"] = "Scanner",
+        ["Src/Hook/init.luau"] = "Hook",
+        ["Src/Pair/init.luau"] = "Pair",
+        ["Src/Recorder/init.luau"] = "Recorder",
+        ["Src/Inventory/init.luau"] = "Inventory",
+        ["Src/Derive/init.luau"] = "Derive",
+        ["Src/Diff/init.luau"] = "Diff",
+        ["Src/FnInfo/init.luau"] = "FnInfo",
+        ["Src/Dedup/init.luau"] = "Dedup",
+        ["Src/UI/init.luau"] = "UI",
+    }
+    local modules = {}
+    for rel, mod in pairs(mods) do
+        modules[short_name[rel] or rel] = mod
+    end
+
     local Main = mods["Src/Main/init.luau"]
     local main = Main.new({
         mode = self.mode,
         parent_session = self.parent_session,
-        modules = mods,
+        modules = modules,
     })
     local ok, res = main:start()
     if not ok then return false, "main:start: " .. tostring(res) end
