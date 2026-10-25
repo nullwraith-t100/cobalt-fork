@@ -1,5 +1,6 @@
 --[[
-    Cobalt Fork v2.4 — Loader FINAL com UI própria (Luau puro, sem dependência externa)
+    Cobalt Fork v2.4 — Loader FINAL com Wind UI (Fase 9 / §14 DESIGN.md)
+    Tenta carregar Wind UI de múltiplas fontes; se todas falharem, usa SimpleUI (Luau puro).
     Inicia o fork completo e abre a aba Recorder com controles de config,
     pause/resume, stats ao vivo e probe status. Copia probe.json para Cobalt/.
 
@@ -8,6 +9,11 @@
 ]]
 
 local COMPLETE_URL = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/Complete/init.luau"
+local WINDUI_URLS = {
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/init.luau",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/master/dist/init.luau",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/dev/dist/init.luau",
+}
 local UI_URL       = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/UI/SimpleUI.luau"
 local PROBE_URL    = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/docs/probe.json"
 
@@ -51,10 +57,31 @@ else
     print("[final] nao baixou probe.json: " .. tostring(perr))
 end
 
--- 2. carrega a UI própria
-local ui_mod, uierr = fetch_module(UI_URL)
-if not ui_mod then
-    return warn("[final] UI nao carregou: " .. tostring(uierr))
+-- 2. tenta carregar Wind UI de múltiplas fontes
+local windui = nil
+for _, url in ipairs(WINDUI_URLS) do
+    local mod, err = fetch_module(url)
+    if mod then
+        windui = mod
+        print("[final] Wind UI carregado de: " .. url)
+        break
+    else
+        print("[final] Wind UI falhou (" .. url .. "): " .. tostring(err))
+    end
+end
+
+local ui_mod, ui_name
+if windui then
+    _G.CobaltFork_WindUI = windui  -- expõe para o módulo WindUI.luau
+    ui_mod = windui
+    ui_name = "WindUI"
+else
+    ui_mod, uierr = fetch_module(UI_URL)
+    if not ui_mod then
+        return warn("[final] UI nao carregou (Wind UI e SimpleUI falharam): " .. tostring(uierr))
+    end
+    ui_name = "SimpleUI"
+    print("[final] Usando SimpleUI como fallback (Wind UI indisponível)")
 end
 
 -- 3. carrega Complete (entry point do fork)
@@ -81,7 +108,7 @@ if not ok4 then
     return warn("[final] UI:start falhou: " .. tostring(win_err))
 end
 
-print("[final] Cobalt Fork v2.4 iniciado. Janela Recorder aberta.")
+print("[final] Cobalt Fork v2.4 iniciado com " .. ui_name .. ". Janela Recorder aberta.")
 
 -- 7. loop de stats ao vivo (atualiza a cada 2 s enquanto a janela estiver visível)
 task.spawn(function()

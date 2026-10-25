@@ -138,7 +138,7 @@ end
 function UI:start()
     self:load_config()
 
-    local windui = fetch_windui()
+    local windui = _G.CobaltFork_WindUI or fetch_windui()
     if not windui then
         return false, "windui_nao_disponivel"
     end
