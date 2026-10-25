@@ -25,6 +25,10 @@ local DEFAULTS = {
     retry_delays_ms = { 100, 500, 2000 },
     -- espelho opcional no logger legado do Cobalt (Src/Utils/FileLog.luau, intocado)
     legacy_filelog = false,
+    -- modos §11: full | lite | dry
+    mode = "full",
+    -- lite: profundidade máxima de serialização de args
+    lite_args_depth = 2,
 }
 
 local function now_ms()
@@ -64,6 +68,8 @@ function Recorder.new(opts)
 
     self.session = opts.session or "test_session"
     self.mode = opts.mode or "full"
+    self.dry = opts.dry == true
+    self.lite = self.mode == "lite"
     self.redaction = opts.redaction or { on = true, regex_version = "v1" }
     self.prefix = opts.prefix or "calls" -- calls.NNNN.ndjson
     self.dir = opts.dir or "Cobalt"     -- diretório de dados
@@ -128,6 +134,13 @@ end
 
 function Recorder:append_raw(line)
     if self.storage_full then return false, "storage_full" end
+    -- modo dry: não grava nada, só conta
+    if self.dry then
+        self.current_bytes = self.current_bytes + #line
+        self.bytes_written = self.bytes_written + #line
+        self.current_lines = self.current_lines + 1
+        return true
+    end
 
     local path = self.current_file
     local delays = self.config.retry_delays_ms
@@ -258,13 +271,23 @@ end
 -- ============================================================
 
 function Recorder:open_next()
+    -- modo dry: não cria arquivo, só incrementa índice
+    if self.dry then
+        self.file_index = self.file_index + 1
+        local name = string.format("%s.%04d.ndjson", self.prefix, self.file_index)
+        self.current_file = name
+        self.current_bytes = 0
+        self.current_lines = 0
+        return true, name
+    end
+
     self.file_index = self.file_index + 1
     local name = string.format("%s.%04d.ndjson", self.prefix, self.file_index)
     self.current_file = string.format("%s/%s", self.dir, name)
     self.current_bytes = 0
     self.current_lines = 0
 
-    -- header imediato; arquivo existente = retomada, header ja esta la
+    -- arquivo existente = retomada, header já está lá
     local exists = false
     if typeof(isfile) == "function" then
         local ok, res = pcall(isfile, self.current_file)
@@ -287,6 +310,7 @@ function Recorder:open_next()
         return true, name
     end
 
+    -- header imediato
     local ok, hline = self:header("calls")
     if not ok then
         return false, hline
@@ -318,6 +342,12 @@ end
 function Recorder:maybe_rotate()
     if not self.current_file then return end
     if self.current_bytes < self.config.rotation_limit_bytes then return end
+
+    -- modo dry: não grava idx
+    if self.dry then
+        self:open_next()
+        return
+    end
 
     -- fecha entrada atual no manifest
     local entry = self.files[#self.files]
@@ -547,6 +577,9 @@ function Recorder:stop()
         entry.by_action_n = self.by_action_n
     end
     self.current_file = nil
+
+    -- modo dry: não grava manifest
+    if self.dry then return end
 
     -- grava manifest.json com todas as entradas de calls
     pcall(function() self:write_manifest() end)
