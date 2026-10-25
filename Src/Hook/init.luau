@@ -9,9 +9,11 @@
 local Hook = {}
 Hook.__index = Hook
 
--- Resolve Enrich no carregamento do módulo (roda em ambiente isolado do loadstring;
--- _G.Enrich pode não ser visível como global dentro das funções).
-local Enrich_mod = _G.Enrich
+-- Resolve Enrich dinamicamente (evita problema de upvalue nil quando modulos
+-- sao carregados fora de ordem em ambientes isolados do loadstring).
+local function _enrich()
+    return _G.Enrich
+end
 
 local RunService = nil
 pcall(function() RunService = game:GetService("RunService") end)
@@ -88,7 +90,7 @@ function Hook.build_record(opts)
     local packed_args = {}
     local arg_nodes = {}
     for i, a in ipairs(args) do
-        local ok, node = Enrich_mod.pack_arg(a)
+        local ok, node = _enrich().pack_arg(a)
         if ok then
             packed_args[i] = node
             arg_nodes[i] = node
@@ -98,7 +100,7 @@ function Hook.build_record(opts)
         end
     end
 
-    local args_sha = Enrich_mod.args_sha(packed_args)
+    local args_sha = _enrich().args_sha(packed_args)
 
     local record = {
         ts = opts.ts or os.time(),
@@ -141,7 +143,7 @@ function Hook.build_record(opts)
     }
 
     -- action cluster via Enrich (gap fecha cluster, action_n incrementa)
-    local action = Enrich_mod.tick_action(tostring(remote_id), tick)
+    local action = _enrich().tick_action(tostring(remote_id), tick)
     record.action_sig = action.action_sig
     record.action_n = action.action_n
     record.action_span_ms = action.action_span_ms
@@ -172,9 +174,14 @@ end
 
 function Hook.reset_corr()
     corr_n = {}
-    if Enrich_mod and Enrich_mod.reset_actions then
-        Enrich_mod.reset_actions()
+    local e = _enrich()
+    if e and e.reset_actions then
+        e.reset_actions()
     end
+end
+
+function Hook.new()
+    return setmetatable({}, Hook)
 end
 
 -- ============================================================
