@@ -198,14 +198,21 @@ local function serialize_value(v, depth, seen, max_depth)
     if ty == "Rect" then return { t = "Rect", v = { { v.Min.X, v.Min.Y }, { v.Max.X, v.Max.Y } } } end
     if ty == "NumberRange" then return { t = "NumberRange", v = { v.Min, v.Max } } end
     if ty == "NumberSequence" then
-        local kps = {}
-        for _, kp in ipairs(v.Keypoints) do kps[#kps + 1] = { kp.Time, kp.Value, kp.Envelope } end
-        return { t = "NumberSequence", kps = kps }
+        local kps, kp_ok = {}, pcall(function()
+            for _, kp in ipairs(v.Keypoints) do kps[#kps + 1] = { kp.Time or 0, kp.Value or 0, kp.Envelope or 0 } end
+        end)
+        return { t = "NumberSequence", kps = kps, ok = kp_ok }
     end
     if ty == "ColorSequence" then
-        local kps = {}
-        for _, kp in ipairs(v.Keypoints) do kps[#kps + 1] = { kp.Time, { kp.Value.R, kp.Value.G, kp.Value.B }, kp.Envelope } end
-        return { t = "ColorSequence", kps = kps }
+        local kps, kp_ok = {}, pcall(function()
+            for _, kp in ipairs(v.Keypoints) do
+                local val = kp.Value
+                local rgb = { 0, 0, 0 }
+                if type(val) == "table" then rgb = { val.R or 0, val.G or 0, val.B or 0 } end
+                kps[#kps + 1] = { kp.Time or 0, rgb, kp.Envelope or 0 }
+            end
+        end)
+        return { t = "ColorSequence", kps = kps, ok = kp_ok }
     end
     if ty == "Ray" then return { t = "Ray", origin = { v.Origin.X, v.Origin.Y, v.Origin.Z }, dir = { v.Direction.X, v.Direction.Y, v.Direction.Z } } end
     if ty == "Region3" then
