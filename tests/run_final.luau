@@ -71,17 +71,21 @@ for _, url in ipairs(WINDUI_URLS) do
 end
 
 local ui_mod, ui_name
-if windui then
-    _G.CobaltFork_WindUI = windui  -- expõe para o módulo WindUI.luau
-    ui_mod = windui
-    ui_name = "WindUI"
-else
+-- Sempre usa meu módulo UI (que internamente busca o WindUI ou usa SimpleUI).
+-- Se o WindUI ja foi baixado acima, expõe via global para evitar download duplo.
+local ui_mod_path = windui and "Src/UI/WindUI.luau" or UI_URL
+ui_mod, uierr = fetch_module(ui_mod_path)
+if not ui_mod then
+    -- fallback direto para SimpleUI se meu modulo UI tambem falhar
     ui_mod, uierr = fetch_module(UI_URL)
     if not ui_mod then
-        return warn("[final] UI nao carregou (Wind UI e SimpleUI falharam): " .. tostring(uierr))
+        return warn("[final] UI nao carregou: " .. tostring(uierr))
     end
     ui_name = "SimpleUI"
-    print("[final] Usando SimpleUI como fallback (Wind UI indisponível)")
+    print("[final] Usando SimpleUI como fallback")
+else
+    ui_name = "WindUI"
+    print("[final] UI carregada com " .. ui_name)
 end
 
 -- 3. carrega Complete (entry point do fork)
