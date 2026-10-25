@@ -90,6 +90,7 @@ function Recorder.new(opts)
     self.encode_errors = 0
     self.storage_full = false
     self.running = false
+    self.paused = false
     self.seq = 0
     self.ctl_depth = 0
     self.last_write_ok = true
@@ -547,6 +548,13 @@ function Recorder:start()
             local jitter = min_ms + math.random() * (max_ms - min_ms)
             task.wait(jitter / 1000)
             if not self.running then break end
+            if self.paused then
+                -- heartbeat continua mesmo pausado, para o leitor saber que o processo vive
+                if now_ms() - self.last_hb_ts >= self.config.heartbeat_ms then
+                    pcall(function() self:heartbeat() end)
+                end
+                continue
+            end
             pcall(function() self:flush() end)
             -- heartbeat a cada 5 s
             if now_ms() - self.last_hb_ts >= self.config.heartbeat_ms then
@@ -555,6 +563,20 @@ function Recorder:start()
         end
     end)
     return true
+end
+
+function Recorder:pause()
+    self.paused = true
+    return true
+end
+
+function Recorder:resume()
+    self.paused = false
+    return true
+end
+
+function Recorder:is_paused()
+    return self.paused == true
 end
 
 function Recorder:stop()
