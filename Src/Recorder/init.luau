@@ -39,6 +39,19 @@ local function safe_encode(value)
     return false, tostring(res)
 end
 
+local function write_file(path, content)
+    local ok, err = pcall(writefile, path, content)
+    if ok then return true end
+    return false, tostring(err)
+end
+
+local function ensure_dir(path)
+    if typeof(makefolder) == "function" then
+        pcall(makefolder, path)
+    end
+    return true
+end
+
 -- ============================================================
 -- new
 -- ============================================================
@@ -525,8 +538,32 @@ function Recorder:stop()
         entry.lines = self.current_lines
         entry.closed = true
         entry.seq_last = self.seq
+        entry.ts_min = self.ts_min
+        entry.ts_max = self.ts_max
+        entry.corr_first = self.corr_first
+        entry.corr_last = self.corr_last
+        entry.by_remote = self.by_remote
+        entry.by_source = self.by_source
+        entry.by_action_n = self.by_action_n
     end
     self.current_file = nil
+
+    -- grava manifest.json com todas as entradas de calls
+    pcall(function() self:write_manifest() end)
+end
+
+-- calls.idx §6.9 + manifest: grava o arquivo de índice de chamadas
+function Recorder:write_manifest()
+    local manifest = {
+        schema = { major = 2, minor = 4 },
+        files = { calls = self.files },
+        idx_covers = {},
+        idx_updated_ts = os.time(),
+    }
+    local ok, enc = safe_encode(manifest)
+    if not ok then return false, enc end
+    ensure_dir(self.dir)
+    return write_file(self.dir .. "/manifest.json", enc)
 end
 
 function Recorder:stats()
