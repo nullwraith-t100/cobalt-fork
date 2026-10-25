@@ -483,10 +483,20 @@ function Session:close(reason, extra)
     end
     stats = stats or { calls_raw = 0, records_written = 0 }
 
-    -- valida tail do ultimo arquivo de calls; erro do recorder vale como truncado
+    -- valida tail do ultimo arquivo de calls.
+    -- No caminho normal de close o Recorder ja sabe se a ultima escrita falhou
+    -- (self.last_write_ok); nao relemos o arquivo inteiro (ate 6 MB) no Android.
+    -- Somente no boot recovery (sessions.idx sem end.json, sem recorder) e
+    -- lemos o arquivo para validar a ultima linha.
     if last_calls then
-        local ok = Session.validate_tail(last_calls)
-        if not ok then stats.tail_truncated = true end
+        local tail_ok = true
+        if self.recorder and self.recorder.last_write_ok ~= nil then
+            tail_ok = self.recorder.last_write_ok
+        else
+            local ok = Session.validate_tail(last_calls)
+            tail_ok = ok
+        end
+        if not tail_ok then stats.tail_truncated = true end
     end
     if stats.tail_truncated == nil then stats.tail_truncated = false end
 

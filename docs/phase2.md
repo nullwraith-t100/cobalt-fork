@@ -45,11 +45,13 @@ Se algum modulo nao compilar, o teste reporta `compile <arquivo> (<bytes>): <err
 | `JSONEncode` falha em NaN/Inf/UTF-8 invalido | pre-sanitizacao no Enrich, antes de chegar no encode |
 | `getconnections` + `hookfunction` ok | incoming entra na Fase 3 pelo wrapper em `Src/Hook/` |
 
-## ASSUME (nao verificavel offline)
+## 3 linhas pendentes/incertas (resolvidas nesta fase)
 
-1. `create_comm_channel` no Delta devolve assinatura diferente de `(id, channel)` (`names_match=false` no probe). O caminho actor so entra na Fase 3 depois de um teste dedicado; ate la, tudo roda na main VM.
-2. Campo `v` de number especial (`nan`/`inf`/`-inf`) sai ausente em vez de `null`: `JSONEncode` nao emite null. O leitor usa `special` como sinal. Documentado no `SCHEMA.md`.
-3. `Session.close` valida a tail relendo o arquivo ativo inteiro (ate 6 MB). Se o custo no Android incomodar, a validacao vira amostra dos ultimos 4 KB — decisao adiada para o primeiro teste em jogo real.
+1. **Tail validation no close** — RESOLVIDO. `Session.close` confia em `Recorder.last_write_ok` (já rastreado pelo Recorder) em vez de reler o arquivo ativo inteiro (até 6 MB). A leitura completa do arquivo só ocorre no caminho de boot recovery (`sessions.idx` sem `end.json`, sem Recorder), que roda uma vez por boot.
+
+2. **NaN/Inf: `v` ausente** — DECISÃO DOCUMENTADA. `JSONEncode` não emite `null`, então `{"t":"number","v":nil,"special":"nan"}` chega como `{"t":"number","special":"nan"}` sem o campo `v`. O leitor usa `special` como sinal. Documentado no `SCHEMA.md` (§"Ausente vs null" e "Limites conhecidos"). Não é bug.
+
+3. **`create_comm_channel` -- ASSUME** — DECISÃO DE ARQUITETURA. Actor não escreve em disco; Fase 3 fica na main VM. O caminho actor entra depois de um teste dedicado com `create_comm_channel` real. Não é bug.
 
 ## Fora de escopo desta fase
 
