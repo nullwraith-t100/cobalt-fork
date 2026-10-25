@@ -34,8 +34,9 @@ local Recorder, e6 = fetch_module("Src/Recorder/init.luau")
 local Inventory, e7 = fetch_module("Src/Inventory/init.luau")
 local Derive, e8 = fetch_module("Src/Derive/init.luau")
 local FnInfo, e9 = fetch_module("Src/FnInfo/init.luau")
-local Diff, e10 = fetch_module("Src/Diff/init.luau")
-local Main, e11 = fetch_module("Src/Main/init.luau")
+local Dedup, e10 = fetch_module("Src/Dedup/init.luau")
+local Diff, e11 = fetch_module("Src/Diff/init.luau")
+local Main, e12 = fetch_module("Src/Main/init.luau")
 
 check("load Enrich", Enrich ~= nil, e1)
 check("load Session", Session ~= nil, e2)
@@ -46,9 +47,10 @@ check("load Recorder", Recorder ~= nil, e6)
 check("load Inventory", Inventory ~= nil, e7)
 check("load Derive", Derive ~= nil, e8)
 check("load FnInfo", FnInfo ~= nil, e9)
-check("load Diff", Diff ~= nil, e10)
-check("load Main", Main ~= nil, e11)
-if not (Enrich and Session and Scanner and Hook and Pair and Recorder and Inventory and Derive and FnInfo and Diff and Main) then
+check("load Dedup", Dedup ~= nil, e10)
+check("load Diff", Diff ~= nil, e11)
+check("load Main", Main ~= nil, e12)
+if not (Enrich and Session and Scanner and Hook and Pair and Recorder and Inventory and Derive and FnInfo and Dedup and Diff and Main) then
     local enc = game:GetService("HttpService"):JSONEncode({ pass = false, results = results })
     pcall(writefile, "Cobalt/phase5_test.json", enc)
     warn("[phase5] modulo nao carregou — veja Cobalt/phase5_test.json")
@@ -66,7 +68,7 @@ local main = Main.new({
     modules = {
         Enrich = Enrich, Session = Session, Scanner = Scanner,
         Hook = Hook, Pair = Pair, Recorder = Recorder,
-        Inventory = Inventory, Derive = Derive, FnInfo = FnInfo, Diff = Diff,
+        Inventory = Inventory, Derive = Derive, FnInfo = FnInfo, Dedup = Dedup, Diff = Diff,
     },
 })
 check("main new", main ~= nil)

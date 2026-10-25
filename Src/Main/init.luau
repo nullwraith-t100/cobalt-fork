@@ -33,6 +33,7 @@ function Main.new(opts)
     self.derive = nil
     self.diff = nil
     self.fninfo = nil
+    self.dedup = nil
     self.running = false
     self.config = opts.config
     self.mode = opts.mode or "full"
@@ -55,6 +56,7 @@ function Main.new(opts)
         Diff = m.Diff or _require("Src.Diff"),
         Enrich = m.Enrich or _require("Src.Enrich"),
         FnInfo = m.FnInfo or _require("Src.FnInfo"),
+        Dedup = m.Dedup or _require("Src.Dedup"),
     }
     return self
 end
@@ -99,6 +101,10 @@ function Main:start()
     -- FnInfo (consts/upvals por funcao)
     local fninfo = FnInfo and FnInfo.new(self.session_dir, sess.session) or nil
     self.fninfo = fninfo
+
+    -- Dedup (agregacao de calls iguais)
+    local dedup = Dedup and Dedup.new(self.mode) or nil
+    self.dedup = dedup
 
     -- Recorder dentro do diretório da sessão
     local rec = Recorder and Recorder.new({
@@ -150,8 +156,10 @@ end
 function Main:_main_loop()
     local last_flush = os.clock()
     local last_expire = os.clock()
+    local last_dedup_flush = os.clock()
     local flush_interval = 2.0
     local expire_interval = 5.0
+    local dedup_flush_interval = 3.0
 
     while self.running do
         task.wait(0.2)
@@ -160,6 +168,15 @@ function Main:_main_loop()
         if os.clock() - last_flush >= flush_interval then
             pcall(function() self.recorder:flush() end)
             last_flush = os.clock()
+        end
+
+        -- flush periódico do Dedup para o Recorder
+        if self.dedup and os.clock() - last_dedup_flush >= dedup_flush_interval then
+            local deduped = self.dedup:flush()
+            for _, rec in ipairs(deduped) do
+                self.recorder:submit(rec)
+            end
+            last_dedup_flush = os.clock()
         end
 
         -- expiração de pendentes antigos (a cada 5 s)
@@ -177,12 +194,18 @@ end
 
 function Main:on_outgoing(record)
     if not self.running then return end
-    local ok = self.pair:push_outgoing(record)
-    if not ok then
-        -- backpressure: grava como unknown direto no Recorder
-        record.outcome = "unknown"
-        record.outcome_from = "expired_pressure"
-        self.recorder:submit(record)
+    if self.dedup then
+        local ok, out = self.dedup:dedup(record)
+        if ok and out then
+            self.recorder:submit(out)
+        end
+    else
+        local ok = self.pair:push_outgoing(record)
+        if not ok then
+            record.outcome = "unknown"
+            record.outcome_from = "expired_pressure"
+            self.recorder:submit(record)
+        end
     end
 end
 
@@ -192,9 +215,16 @@ end
 
 function Main:on_incoming(record)
     if not self.running then return end
-    local ok, outcome, outcome_from, paired_corr = self.pair:push_incoming(record)
-    if ok then
-        self.recorder:submit(record)
+    if self.dedup then
+        local ok, out = self.dedup:dedup(record)
+        if ok and out then
+            self.recorder:submit(out)
+        end
+    else
+        local ok, outcome, outcome_from, paired_corr = self.pair:push_incoming(record)
+        if ok then
+            self.recorder:submit(record)
+        end
     end
 end
 
@@ -204,8 +234,15 @@ end
 
 function Main:on_invoke_resolved(record, ret, err, elapsed_ms)
     if not self.running then return end
-    local outcome, outcome_from = self.pair:resolve_invoke(record, ret, err, elapsed_ms)
-    self.recorder:submit(record)
+    if self.dedup then
+        local ok, out = self.dedup:dedup(record)
+        if ok and out then
+            self.recorder:submit(out)
+        end
+    else
+        local outcome, outcome_from = self.pair:resolve_invoke(record, ret, err, elapsed_ms)
+        self.recorder:submit(record)
+    end
 end
 
 -- ============================================================
@@ -245,6 +282,14 @@ function Main:close(reason, extra)
     extra.reason = reason
 
     self.running = false
+
+    -- flush final do Dedup: agregados restantes vão para o Recorder
+    if self.dedup then
+        local deduped = self.dedup:flush()
+        for _, rec in ipairs(deduped) do
+            self.recorder:submit(rec)
+        end
+    end
 
     -- drena fila do Recorder e fecha arquivo ativo
     if self.recorder then
