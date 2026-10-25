@@ -447,7 +447,7 @@ function UI:build_recorder_tab()
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = cont,
         })
-        self.stats_labels[key] = val
+        self.stats_labels[key] = { set = function(v) val.Text = tostring(v) end }
     end
 
     -- ============================================================
