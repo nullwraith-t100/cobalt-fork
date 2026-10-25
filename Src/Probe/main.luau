@@ -1,22 +1,30 @@
 --[[
     Cobalt Fork v2.4 — Fase 0: Probe entry point
-    Chama Probe.run() e grava Cobalt/probe.json.
-    Execute este arquivo no Delta.
+    Baixa e executa Src/Probe/init.luau via HttpGet, grava Cobalt/probe.json.
+    Execute este arquivo no Delta via loadstring.
 --]]
 
-local Probe = require(script and script.Parent:FindFirstChild("init") or nil)
+local http = game:GetService("HttpService")
 
--- Fallback se require via script não funcionar (ex.: execução direta)
-if not Probe then
-    local ok, mod = pcall(function()
-        return loadfile("Src/Probe/init.luau")()
-    end)
-    if ok then Probe = mod end
+local function fetch_src()
+    local url = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/Probe/init.luau"
+    local ok, res = pcall(http.GetAsync, http, url)
+    if not ok then
+        error("Falha ao baixar init.luau: " .. tostring(res))
+    end
+    return res
 end
 
-if not Probe then
-    warn("[Probe] Não foi possível carregar o módulo Probe.")
-    return
+local src = fetch_src()
+
+local chunk, err = loadstring(src, "=Src/Probe/init.luau")
+if not chunk then
+    error("Falha ao compilar init.luau: " .. tostring(err))
+end
+
+local Probe = chunk()
+if not Probe or type(Probe.run) ~= "function" then
+    error("init.luau não retornou um módulo com Probe.run")
 end
 
 local ok, report = pcall(function()
@@ -27,7 +35,6 @@ if ok then
     print("[Probe] Concluído. Resultado gravado em Cobalt/probe.json")
     print("[Probe] Executor: " .. tostring(report.executor) .. " " .. tostring(report.executor_version))
     print("[Probe] Timestamp: " .. tostring(report.timestamp))
-    -- imprime resumo dos testes
     for nome, res in pairs(report.results or {}) do
         local status = "?"
         if res.ok == false then status = "FALHOU"
