@@ -83,6 +83,10 @@ function Recorder.new(opts)
     self.ts_max = nil
     self.corr_first = nil
     self.corr_last = nil
+    -- indices por chamada (§6.9)
+    self.by_remote = {}
+    self.by_source = {}
+    self.by_action_n = {}
     return self
 end
 
@@ -292,6 +296,9 @@ function Recorder:open_next()
     self.ts_max = nil
     self.corr_first = nil
     self.corr_last = nil
+    self.by_remote = {}
+    self.by_source = {}
+    self.by_action_n = {}
     return true, name
 end
 
@@ -310,6 +317,9 @@ function Recorder:maybe_rotate()
         entry.ts_max = self.ts_max
         entry.corr_first = self.corr_first
         entry.corr_last = self.corr_last
+        entry.by_remote = self.by_remote
+        entry.by_source = self.by_source
+        entry.by_action_n = self.by_action_n
         self:write_idx_entry(entry)
     end
     self:open_next()
@@ -449,6 +459,16 @@ function Recorder:flush()
             if rec.corr then
                 if not self.corr_first then self.corr_first = rec.corr end
                 self.corr_last = rec.corr
+            end
+            -- indices por chamada (§6.9)
+            if rec.remote then
+                self.by_remote[rec.remote] = (self.by_remote[rec.remote] or 0) + 1
+            end
+            if rec.src and rec.src.path then
+                self.by_source[rec.src.path] = (self.by_source[rec.src.path] or 0) + 1
+            end
+            if rec.action_n then
+                self.by_action_n[tostring(rec.action_n)] = (self.by_action_n[tostring(rec.action_n)] or 0) + 1
             end
         end
     else
