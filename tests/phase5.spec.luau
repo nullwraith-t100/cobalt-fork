@@ -33,8 +33,9 @@ local Pair, e5 = fetch_module("Src/Pair/init.luau")
 local Recorder, e6 = fetch_module("Src/Recorder/init.luau")
 local Inventory, e7 = fetch_module("Src/Inventory/init.luau")
 local Derive, e8 = fetch_module("Src/Derive/init.luau")
-local Diff, e9 = fetch_module("Src/Diff/init.luau")
-local Main, e10 = fetch_module("Src/Main/init.luau")
+local FnInfo, e9 = fetch_module("Src/FnInfo/init.luau")
+local Diff, e10 = fetch_module("Src/Diff/init.luau")
+local Main, e11 = fetch_module("Src/Main/init.luau")
 
 check("load Enrich", Enrich ~= nil, e1)
 check("load Session", Session ~= nil, e2)
@@ -44,9 +45,10 @@ check("load Pair", Pair ~= nil, e5)
 check("load Recorder", Recorder ~= nil, e6)
 check("load Inventory", Inventory ~= nil, e7)
 check("load Derive", Derive ~= nil, e8)
-check("load Diff", Diff ~= nil, e9)
-check("load Main", Main ~= nil, e10)
-if not (Enrich and Session and Scanner and Hook and Pair and Recorder and Inventory and Derive and Diff and Main) then
+check("load FnInfo", FnInfo ~= nil, e9)
+check("load Diff", Diff ~= nil, e10)
+check("load Main", Main ~= nil, e11)
+if not (Enrich and Session and Scanner and Hook and Pair and Recorder and Inventory and Derive and FnInfo and Diff and Main) then
     local enc = game:GetService("HttpService"):JSONEncode({ pass = false, results = results })
     pcall(writefile, "Cobalt/phase5_test.json", enc)
     warn("[phase5] modulo nao carregou — veja Cobalt/phase5_test.json")
@@ -64,7 +66,7 @@ local main = Main.new({
     modules = {
         Enrich = Enrich, Session = Session, Scanner = Scanner,
         Hook = Hook, Pair = Pair, Recorder = Recorder,
-        Inventory = Inventory, Derive = Derive, Diff = Diff,
+        Inventory = Inventory, Derive = Derive, FnInfo = FnInfo, Diff = Diff,
     },
 })
 check("main new", main ~= nil)
@@ -204,12 +206,13 @@ end
 check("sessions.idx ts_end preenchido", #idx2 == 1 and idx2[1].ts_end ~= nil, tostring(idx2[1] and idx2[1].ts_end or "ausente"))
 
 -- ============================================================
--- 5. Arquivos derivados: inventory, tree, tree_delta
+-- 5. Arquivos derivados: inventory, tree, tree_delta, fn_info
 -- ============================================================
 
 check("inventory.ndjson escrito", (select(1, pcall(isfile, sess_dir .. "/inventory.ndjson"))) == true)
 check("tree.ndjson escrito", (select(1, pcall(isfile, sess_dir .. "/tree.ndjson"))) == true)
 check("tree_delta.ndjson escrito", (select(1, pcall(isfile, sess_dir .. "/tree_delta.ndjson"))) == true)
+check("fn_info.ndjson escrito", (select(1, pcall(isfile, sess_dir .. "/fn_info.ndjson"))) == true)
 
 -- ============================================================
 -- 6. game_summary.json e remote_profiles.json

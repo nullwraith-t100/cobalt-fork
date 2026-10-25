@@ -32,6 +32,7 @@ function Main.new(opts)
     self.inventory = nil
     self.derive = nil
     self.diff = nil
+    self.fninfo = nil
     self.running = false
     self.config = opts.config
     self.mode = opts.mode or "full"
@@ -53,6 +54,7 @@ function Main.new(opts)
         Derive = m.Derive or _require("Src.Derive"),
         Diff = m.Diff or _require("Src.Diff"),
         Enrich = m.Enrich or _require("Src.Enrich"),
+        FnInfo = m.FnInfo or _require("Src.FnInfo"),
     }
     return self
 end
@@ -93,6 +95,10 @@ function Main:start()
     -- Inventory
     local inv = Inventory and Inventory.new(sess.session, self.mode) or nil
     self.inventory = inv
+
+    -- FnInfo (consts/upvals por funcao)
+    local fninfo = FnInfo and FnInfo.new(self.session_dir, sess.session) or nil
+    self.fninfo = fninfo
 
     -- Recorder dentro do diretório da sessão
     local rec = Recorder and Recorder.new({
@@ -214,6 +220,21 @@ function Main:expire_pendings(older_than_ts, observable_map)
 end
 
 -- ============================================================
+-- capture_fn: chamado pelo Hook para registrar consts/upvals de uma funcao
+-- ============================================================
+
+function Main:capture_fn(fn, src_path, line)
+    if not self.running then return end
+    if self.fninfo then
+        local ok, sha, entry = self.fninfo:capture(fn, src_path, line, self.modules.Enrich)
+        if ok and entry then
+            -- o registro de call pode referenciar upvals_ref/consts_ref como "<path>:<line>"
+            self.modules.Enrich = self.modules.Enrich -- garante referencia
+        end
+    end
+end
+
+-- ============================================================
 -- close: fecha a sessão (end.json + manifest + sessions.idx + arquivos derivados)
 -- ============================================================
 
@@ -263,6 +284,14 @@ function Main:close(reason, extra)
         local inv_content = self.inventory:write(self.session.session, self.mode)
         if inv_content then
             pcall(function() writefile(session_dir .. "/inventory.ndjson", inv_content) end)
+        end
+    end
+
+    -- fn_info.ndjson (§6.8)
+    if self.fninfo then
+        local ok_fn, fn_content = self.fninfo:write_ndjson(self.session.session)
+        if ok_fn then
+            pcall(function() writefile(session_dir .. "/fn_info.ndjson", fn_content) end)
         end
     end
 
