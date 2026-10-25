@@ -9,6 +9,29 @@
 local FnInfo = {}
 FnInfo.__index = FnInfo
 
+-- converte um valor Lua (possivelmente tabela) para string segura para hash
+local function upval_to_str(v)
+    local t = type(v)
+    if t == "string" then return v end
+    if t == "number" or t == "boolean" then return tostring(v) end
+    if t == "nil" then return "nil" end
+    if t == "table" then
+        local ok, enc = pcall(function() return HttpService:JSONEncode(v) end)
+        if ok then return enc end
+        return "table:" .. tostring(v)
+    end
+    return "opaque:" .. t
+end
+
+-- monta a string de upvals para hashear
+local function upvals_concat(upvals)
+    local parts = {}
+    for _, v in ipairs(upvals) do
+        parts[#parts + 1] = upval_to_str(v)
+    end
+    return table.concat(parts, "|")
+end
+
 local HttpService = game:GetService("HttpService")
 
 local function safe_encode(value)
@@ -148,6 +171,12 @@ function FnInfo:capture(fn, src_path, line, Enrich)
         for i = 51, #upvals_nodes do upvals_nodes[i] = nil end
     end
 
+    -- converte upvals para strings seguras antes de hashear (table.concat nao aceita tabelas)
+    local upval_strs = {}
+    for _, v in ipairs(upvals) do
+        upval_strs[#upval_strs + 1] = upval_to_str(v)
+    end
+
     local entry = {
         src = src_path or src,
         line = ln,
@@ -159,7 +188,7 @@ function FnInfo:capture(fn, src_path, line, Enrich)
         consts_available = #consts > 0,
         first_ts = os.time(),
         upvals_last_ts = os.time(),
-        upvals_sha = Enrich.hash64(table.concat(upvals, "|")),
+        upvals_sha = Enrich.hash64(table.concat(upval_strs, "|")),
     }
 
     self.seen[key] = true
@@ -227,7 +256,7 @@ function FnInfo:refresh_upvals(fn, src_path, line, Enrich, new_ts)
             entry.upvals = upvals_nodes
             entry.upvals_trunc = upvals_trunc
             entry.upvals_last_ts = new_ts or os.time()
-            entry.upvals_sha = Enrich.hash64(table.concat(upvals, "|"))
+            entry.upvals_sha = Enrich.hash64(upvals_concat(upvals))
             return true
         end
     end
