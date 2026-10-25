@@ -10,9 +10,9 @@
 
 local COMPLETE_URL = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/Complete/init.luau"
 local WINDUI_URLS = {
-    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/init.luau",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/master/dist/init.luau",
-    "https://raw.githubusercontent.com/Footagesus/WindUI/dev/dist/init.luau",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/master/dist/main.lua",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/dev/dist/main.lua",
 }
 local UI_URL       = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/UI/SimpleUI.luau"
 local PROBE_URL    = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/docs/probe.json"
