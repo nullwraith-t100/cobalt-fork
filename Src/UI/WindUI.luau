@@ -173,6 +173,7 @@ function UI:build_recorder_tab()
     local main = self.main
     local cfg = self.config
 
+    -- no WindUI, elementos ficam dentro de Section, nao direto no Tab
     local function add_section(name)
         local ok, section = pcall(function() return tab:Section({ Title = name }) end)
         if not ok then return nil end
@@ -285,6 +286,12 @@ function UI:build_recorder_tab()
         add_button(sec_ctrl, "Resume", function()
             local rec = main and main.recorder
             if rec then rec:resume() end
+        end)
+        add_button(sec_ctrl, "Minimizar", function()
+            if self.window and self.window.SetToggleKey then
+                -- minimizar/ocultar a janela
+                pcall(function() self.window:SetVisible(false) end)
+            end
         end)
         add_button(sec_ctrl, "Clean orphans", function()
             print("[UI] Clean orphans solicitado (execucao manual pendente - sem auto-delete por design)")
