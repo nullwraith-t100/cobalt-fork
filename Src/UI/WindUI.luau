@@ -1,9 +1,9 @@
 --[[
-    Cobalt Fork v2.4 — UI Wind UI (Fase 9 / §14 DESIGN.md)
-    Aba Recorder para o menu Cobalt.
+    Cobalt Fork v2.4 — WindUI Recorder (Fase 9 / §14 DESIGN.md)
+    UI usando WindUI (Footagesus/WindUI).
     Sem hotkey, sem "open folder" (Android).
     Salva config em config.json com redaction_salt.
-]]
+--]]
 
 local UI = {}
 UI.__index = UI
@@ -11,18 +11,18 @@ UI.__index = UI
 local HttpService = game:GetService("HttpService")
 
 local WINDUI_URLS = {
-    "https://raw.githubusercontent.com/Stefanuk12/WindUI/main/dist/init.luau",
-    "https://raw.githubusercontent.com/Stefanuk12/WindUI/master/dist/init.luau",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua",
+    "https://raw.githubusercontent.com/Footagesus/WindUI/master/dist/main.lua",
 }
 
 local function fetch_windui()
     for _, url in ipairs(WINDUI_URLS) do
         local ok, src = pcall(function() return game:HttpGet(url) end)
-        if ok and type(src) == "string" and #src > 100 then
+        if ok and type(src) == "string" and #src > 1000 then
             local chunk, err = loadstring(src)
             if chunk then
                 local run_ok, windui = pcall(chunk)
-                if run_ok and type(windui) == "table" then
+                if run_ok and type(windui) == "table" and type(windui.CreateWindow) == "function" then
                     return windui
                 end
             end
@@ -56,27 +56,18 @@ local function ensure_dir(path)
     return true
 end
 
--- ============================================================
--- new
--- ============================================================
-
 function UI.new(complete_inst)
     local self = setmetatable({}, UI)
-    -- complete_inst é a instância de Src/Complete; o Main real fica em complete_inst.main
     self.complete = complete_inst
-    self.main = complete_inst and complete_inst.main or nil  -- Main instance real
+    self.main = complete_inst and complete_inst.main or nil
     self.window = nil
-    self.recorder_tab = nil
     self.windui = nil
     self.config_path = "Cobalt/config.json"
     self.config = {}
     self.visible = false
+    self.stats_labels = {}
     return self
 end
-
--- ============================================================
--- config
--- ============================================================
 
 function UI:load_config()
     ensure_dir("Cobalt")
@@ -119,10 +110,6 @@ function UI:save_config()
     return write_file(self.config_path, enc)
 end
 
--- ============================================================
--- probe status
--- ============================================================
-
 function UI:probe_status()
     local ok, content = read_file("Cobalt/probe.json")
     if not ok then return nil end
@@ -130,10 +117,6 @@ function UI:probe_status()
     if not dec_ok then return nil end
     return decoded
 end
-
--- ============================================================
--- start: cria a janela Wind UI
--- ============================================================
 
 function UI:start()
     self:load_config()
@@ -144,11 +127,22 @@ function UI:start()
     end
     self.windui = windui
 
-    -- cria janela
     local ok, window = pcall(function()
-        return windui:Window({
-            Name = "Cobalt Fork v2.4 — Recorder",
+        return windui:CreateWindow({
+            Title = "Cobalt Fork v2.4 - Recorder",
             Folder = "Cobalt",
+            Icon = "solar:folder-2-bold-duotone",
+            HideSearchBar = true,
+            OpenButton = {
+                Title = "Open Recorder",
+                Enabled = true,
+                Draggable = true,
+                OnlyMobile = false,
+            },
+            Topbar = {
+                Height = 44,
+                ButtonsType = "Mac",
+            },
         })
     end)
     if not ok or not window then
@@ -156,11 +150,11 @@ function UI:start()
     end
     self.window = window
 
-    -- aba Recorder
     local ok2, tab = pcall(function()
         return window:Tab({
-            Name = "Recorder",
-            Icon = "recorder",
+            Title = "Recorder",
+            Icon = "solar:record-circle-bold",
+            Border = true,
         })
     end)
     if not ok2 or not tab then
@@ -174,19 +168,13 @@ function UI:start()
     return true, self
 end
 
--- ============================================================
--- build_recorder_tab: constrói todos os controles §14
--- ============================================================
-
 function UI:build_recorder_tab()
     local tab = self.recorder_tab
     local main = self.main
     local cfg = self.config
 
     local function add_section(name)
-        local ok, section = pcall(function()
-            return tab:Section({ Name = name })
-        end)
+        local ok, section = pcall(function() return tab:Section({ Title = name }) end)
         if not ok then return nil end
         return section
     end
@@ -194,10 +182,10 @@ function UI:build_recorder_tab()
     local function add_toggle(section, label, key, default)
         local ok, toggle = pcall(function()
             return section:Toggle({
-                Name = label,
-                Default = cfg[key] ~= nil and cfg[key] or default,
-                Callback = function(value)
-                    cfg[key] = value == true
+                Title = label,
+                Value = cfg[key] ~= nil and cfg[key] or default,
+                Callback = function(v)
+                    cfg[key] = v == true
                     UI:save_config()
                 end,
             })
@@ -205,20 +193,14 @@ function UI:build_recorder_tab()
         return ok and toggle or nil
     end
 
-    local function add_input(section, label, key, placeholder, default, input_type)
+    local function add_input(section, label, key, placeholder, default)
         local ok, input = pcall(function()
             return section:Input({
-                Name = label,
+                Title = label,
                 Placeholder = placeholder or "",
-                Default = tostring(cfg[key] ~= nil and cfg[key] or default),
-                Numeric = input_type == "number" or nil,
-                Finished = true,
-                Callback = function(value)
-                    if input_type == "number" then
-                        cfg[key] = tonumber(value)
-                    else
-                        cfg[key] = value
-                    end
+                Value = tostring(cfg[key] ~= nil and cfg[key] or default),
+                Callback = function(v)
+                    cfg[key] = v
                     UI:save_config()
                 end,
             })
@@ -229,11 +211,11 @@ function UI:build_recorder_tab()
     local function add_dropdown(section, label, key, options, default)
         local ok, dropdown = pcall(function()
             return section:Dropdown({
-                Name = label,
-                Options = options,
-                Default = cfg[key] ~= nil and cfg[key] or default,
-                Callback = function(value)
-                    cfg[key] = value
+                Title = label,
+                Values = options,
+                Value = cfg[key] ~= nil and cfg[key] or options[1],
+                Callback = function(v)
+                    cfg[key] = v
                     UI:save_config()
                 end,
             })
@@ -244,56 +226,56 @@ function UI:build_recorder_tab()
     local function add_button(section, label, callback)
         local ok, btn = pcall(function()
             return section:Button({
-                Name = label,
+                Title = label,
                 Callback = callback,
             })
         end)
         return ok and btn or nil
     end
 
-    -- ============================================================
-    -- Seção: Mode
-    -- ============================================================
+    local function add_stat(key)
+        local ok, par = pcall(function()
+            return tab:Paragraph({
+                Title = key .. ":",
+                Desc = "0",
+                Justify = "Center",
+                ImageSize = 0,
+            })
+        end)
+        if ok then
+            self.stats_labels[key] = par
+        end
+        return par
+    end
+
     local sec_mode = add_section("Mode")
     if sec_mode then
         add_dropdown(sec_mode, "Mode", "mode", { "full", "lite", "dry" }, cfg.mode or "full")
     end
 
-    -- ============================================================
-    -- Seção: Redaction
-    -- ============================================================
-    local sec_red = add_section("Redaction")
+    local sec_red = add_section("Redacao")
     if sec_red then
-        add_toggle(sec_red, "Redação ativa", "redaction_on", true)
-        add_input(sec_red, "Regex de redação", "redaction_regex", "^(token|apikey|...)", cfg.redaction_regex)
-        add_input(sec_red, "Min sha length", "redaction_min_sha_len", "16", tostring(cfg.redaction_min_sha_len or 16), "number")
+        add_toggle(sec_red, "Redacao ativa", "redaction_on", true)
+        add_input(sec_red, "Regex de redacao", "redaction_regex", "^(token|apikey|...)", cfg.redaction_regex)
+        add_input(sec_red, "Min sha length", "redaction_min_sha_len", "16", tostring(cfg.redaction_min_sha_len or 16))
     end
 
-    -- ============================================================
-    -- Seção: Storage
-    -- ============================================================
     local sec_st = add_section("Storage")
     if sec_st then
-        add_input(sec_st, "Storage threshold (MB)", "storage_threshold_bytes", "200", tostring(math.floor((cfg.storage_threshold_bytes or 209715200) / 1024 / 1024)), "number")
-        add_input(sec_st, "Rotation limit (MB)", "rotation_limit_bytes", "6", tostring(math.floor((cfg.rotation_limit_bytes or 6291456) / 1024 / 1024)), "number")
-        add_input(sec_st, "Mem spool (MB)", "mem_spool_bytes", "8", tostring(math.floor((cfg.mem_spool_bytes or 8388608) / 1024 / 1024)), "number")
+        add_input(sec_st, "Storage threshold (MB)", "storage_threshold_bytes", "200", tostring(math.floor((cfg.storage_threshold_bytes or 209715200) / 1024 / 1024)))
+        add_input(sec_st, "Rotation limit (MB)", "rotation_limit_bytes", "6", tostring(math.floor((cfg.rotation_limit_bytes or 6291456) / 1024 / 1024)))
+        add_input(sec_st, "Mem spool (MB)", "mem_spool_bytes", "8", tostring(math.floor((cfg.mem_spool_bytes or 8388608) / 1024 / 1024)))
     end
 
-    -- ============================================================
-    -- Seção: Pair & Action
-    -- ============================================================
     local sec_pair = add_section("Pair & Action")
     if sec_pair then
-        add_input(sec_pair, "Pair window min (ms)", "pair_window_ms_min", "500", tostring(cfg.pair_window_ms_min or 500), "number")
-        add_input(sec_pair, "Pair window max (ms)", "pair_window_ms_max", "3000", tostring(cfg.pair_window_ms_max or 3000), "number")
-        add_input(sec_pair, "Action gap (ms)", "action_gap_ms", "100", tostring(cfg.action_gap_ms or 100), "number")
-        add_input(sec_pair, "Rare threshold", "rare_threshold", "5", tostring(cfg.rare_threshold or 5), "number")
+        add_input(sec_pair, "Pair window min (ms)", "pair_window_ms_min", "500", tostring(cfg.pair_window_ms_min or 500))
+        add_input(sec_pair, "Pair window max (ms)", "pair_window_ms_max", "3000", tostring(cfg.pair_window_ms_max or 3000))
+        add_input(sec_pair, "Action gap (ms)", "action_gap_ms", "100", tostring(cfg.action_gap_ms or 100))
+        add_input(sec_pair, "Rare threshold", "rare_threshold", "5", tostring(cfg.rare_threshold or 5))
         add_toggle(sec_pair, "Diff enabled", "diff_enabled", false)
     end
 
-    -- ============================================================
-    -- Seção: Controles
-    -- ============================================================
     local sec_ctrl = add_section("Controles")
     if sec_ctrl then
         add_button(sec_ctrl, "Pause", function()
@@ -305,96 +287,49 @@ function UI:build_recorder_tab()
             if rec then rec:resume() end
         end)
         add_button(sec_ctrl, "Clean orphans", function()
-            -- confirmação simples via prompt do Wind UI se disponível
-            local ok = pcall(function()
-                windui:Dialog({
-                    Title = "Clean orphans",
-                    Content = "Tem certeza que deseja remover arquivos órfãos de shared/?",
-                    Buttons = {
-                        { Name = "Confirmar", Callback = function()
-                            -- limpeza manual: não auto-delete por design (§6.7, §13)
-                            -- aqui apenas registra a intenção; execução manual pelo operador
-                            print("[UI] Clean orphans solicitado (execução manual pendente)")
-                        end },
-                        { Name = "Cancelar", Callback = function() end },
-                    },
-                })
-            end)
-            if not ok then
-                print("[UI] Clean orphans: Wind UI Dialog não disponível")
-            end
+            print("[UI] Clean orphans solicitado (execucao manual pendente - sem auto-delete por design)")
         end)
     end
 
-    -- ============================================================
-    -- Seção: Probe status (read-only)
-    -- ============================================================
     local sec_probe = add_section("Probe status")
     if sec_probe then
         local probe = self:probe_status()
         if probe then
-            add_input(sec_probe, "Executor", nil, "", tostring(probe.executor or "?"))
-            add_input(sec_probe, "Versão", nil, "", tostring(probe.executor_version or "?"))
-            add_input(sec_probe, "Timestamp", nil, "", tostring(probe.timestamp or "?"))
+            add_stat("executor")
+            self.stats_labels.executor:Desc(tostring(probe.executor or "?"))
+            add_stat("versao")
+            self.stats_labels.versao:Desc(tostring(probe.executor_version or "?"))
             if probe.results then
                 for nome, res in pairs(probe.results) do
                     local status = "?"
                     if res.ok == false then status = "FALHOU"
-                    elseif res.exists == false then status = "INDISPONÍVEL"
-                    elseif res.available == false then status = "INDISPONÍVEL"
+                    elseif res.exists == false then status = "INDISPONIVEL"
+                    elseif res.available == false then status = "INDISPONIVEL"
                     else status = "OK" end
-                    add_input(sec_probe, nome, nil, "", status)
+                    add_stat(nome)
+                    self.stats_labels[nome]:Desc(status)
                 end
             end
             if probe.recommended_config then
-                add_input(sec_probe, "bytecode_hash", nil, "", tostring(probe.recommended_config.bytecode_hash or "?"))
-                add_input(sec_probe, "rotation_limit_bytes", nil, "", tostring(probe.recommended_config.rotation_limit_bytes or "?"))
+                add_stat("bytecode_hash")
+                self.stats_labels.bytecode_hash:Desc(tostring(probe.recommended_config.bytecode_hash or "?"))
             end
         else
-            add_input(sec_probe, "Status", nil, "", "probe.json não encontrado")
+            add_stat("probe")
+            self.stats_labels.probe:Desc("probe.json nao encontrado")
         end
     end
 
-    -- ============================================================
-    -- Seção: Stats ao vivo
-    -- ============================================================
     local sec_stats = add_section("Stats ao vivo")
     if sec_stats then
-        self.stats_labels = {}
-        local function add_stat(label, key)
-            local ok, lbl = pcall(function()
-                return section:Paragraph({ Title = label, Content = "?" })
-            end)
-            if ok then
-                self.stats_labels[key] = lbl
-            end
-        end
-        -- usamos a mesma sec_stats; Paragraph pode não existir em todas versões do Wind UI.
-        -- fallback: usamos Input readonly-like
-        local function add_stat_input(label, key)
-            local ok, inp = pcall(function()
-                return sec_stats:Input({
-                    Name = label,
-                    Placeholder = "-",
-                    Default = "0",
-                })
-            end)
-            if ok then
-                self.stats_labels[key] = inp
-            end
-        end
-        add_stat_input("calls_raw", "calls_raw")
-        add_stat_input("records_written", "records_written")
-        add_stat_input("dropped_under_pressure", "dropped")
-        add_stat_input("flush_errors", "flush_errors")
-        add_stat_input("encode_errors", "encode_errors")
-        add_stat_input("paused", "paused")
+        add_stat("calls_raw")
+        add_stat("records_written")
+        add_stat("dropped")
+        add_stat("flush_errors")
+        add_stat("encode_errors")
+        add_stat("paused")
     end
 end
-
--- ============================================================
--- update_stats: atualiza labels ao vivo (chamar periodicamente)
--- ============================================================
 
 function UI:update_stats()
     if not self.main or not self.main.recorder then return end
@@ -402,19 +337,15 @@ function UI:update_stats()
     local st = rec:stats()
     for key, lbl in pairs(self.stats_labels or {}) do
         local val = st[key]
-        if val == nil then val = "0" end
+        if val == nil then val = 0 end
         if key == "paused" then
-            val = tostring(rec:is_paused())
+            val = rec:is_paused() and 1 or 0
         end
-        pcall(function()
-            if lbl and lbl.Set then lbl:Set(tostring(val)) end
-        end)
+        if lbl and lbl.Desc then
+            pcall(function() lbl:Desc(tostring(val)) end)
+        end
     end
 end
-
--- ============================================================
--- apply_config: aplica config ao Recorder/Session ativos
--- ============================================================
 
 function UI:apply_config()
     if not self.main then return end
@@ -428,10 +359,6 @@ function UI:apply_config()
     end
 end
 
--- ============================================================
--- start_session: chama main:start() com config atual
--- ============================================================
-
 function UI:start_session()
     if not self.complete then return false, "sem_complete" end
     self:apply_config()
@@ -440,10 +367,6 @@ function UI:start_session()
     return true, res
 end
 
--- ============================================================
--- close_session: chama complete:close()
--- ============================================================
-
 function UI:close_session(reason)
     if not self.complete then return false, "sem_complete" end
     reason = reason or "manual"
@@ -451,10 +374,6 @@ function UI:close_session(reason)
     if not ok then return false, tostring(end_rec) end
     return true, end_rec
 end
-
--- ============================================================
--- destroy: fecha a janela
--- ============================================================
 
 function UI:destroy()
     if self.window then
