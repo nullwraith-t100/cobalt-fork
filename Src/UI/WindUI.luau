@@ -56,6 +56,11 @@ local function ensure_dir(path)
     return true
 end
 
+-- WindUI funcoes retornam (tipo_string, objeto). Pegamos sempre o segundo retorno.
+local function second(ret1, ret2)
+    return ret2
+end
+
 function UI.new(complete_inst)
     local self = setmetatable({}, UI)
     self.complete = complete_inst
@@ -128,7 +133,7 @@ function UI:start()
     self.windui = windui
 
     local ok, window = pcall(function()
-        return windui:CreateWindow({
+        local _, w = windui:CreateWindow({
             Title = "Cobalt Fork v2.4 - Recorder",
             Folder = "Cobalt",
             Icon = "solar:folder-2-bold-duotone",
@@ -144,6 +149,7 @@ function UI:start()
                 ButtonsType = "Mac",
             },
         })
+        return w
     end)
     if not ok or not window then
         return false, "janela: " .. tostring(window)
@@ -151,11 +157,12 @@ function UI:start()
     self.window = window
 
     local ok2, tab = pcall(function()
-        return window:Tab({
+        local _, t = window:Tab({
             Title = "Recorder",
             Icon = "solar:record-circle-bold",
             Border = true,
         })
+        return t
     end)
     if not ok2 or not tab then
         return false, "tab: " .. tostring(tab)
@@ -173,16 +180,18 @@ function UI:build_recorder_tab()
     local main = self.main
     local cfg = self.config
 
-    -- no WindUI, elementos ficam dentro de Section, nao direto no Tab
     local function add_section(name)
-        local ok, section = pcall(function() return tab:Section({ Title = name }) end)
+        local ok, section = pcall(function()
+            local _, s = tab:Section({ Title = name })
+            return s
+        end)
         if not ok then return nil end
         return section
     end
 
     local function add_toggle(section, label, key, default)
         local ok, toggle = pcall(function()
-            return section:Toggle({
+            local _, t = section:Toggle({
                 Title = label,
                 Value = cfg[key] ~= nil and cfg[key] or default,
                 Callback = function(v)
@@ -190,13 +199,14 @@ function UI:build_recorder_tab()
                     UI:save_config()
                 end,
             })
+            return t
         end)
         return ok and toggle or nil
     end
 
     local function add_input(section, label, key, placeholder, default)
         local ok, input = pcall(function()
-            return section:Input({
+            local _, i = section:Input({
                 Title = label,
                 Placeholder = placeholder or "",
                 Value = tostring(cfg[key] ~= nil and cfg[key] or default),
@@ -205,13 +215,14 @@ function UI:build_recorder_tab()
                     UI:save_config()
                 end,
             })
+            return i
         end)
         return ok and input or nil
     end
 
     local function add_dropdown(section, label, key, options, default)
         local ok, dropdown = pcall(function()
-            return section:Dropdown({
+            local _, d = section:Dropdown({
                 Title = label,
                 Values = options,
                 Value = cfg[key] ~= nil and cfg[key] or options[1],
@@ -220,28 +231,31 @@ function UI:build_recorder_tab()
                     UI:save_config()
                 end,
             })
+            return d
         end)
         return ok and dropdown or nil
     end
 
     local function add_button(section, label, callback)
         local ok, btn = pcall(function()
-            return section:Button({
+            local _, b = section:Button({
                 Title = label,
                 Callback = callback,
             })
+            return b
         end)
         return ok and btn or nil
     end
 
     local function add_stat(key)
         local ok, par = pcall(function()
-            return tab:Paragraph({
+            local _, p = tab:Paragraph({
                 Title = key .. ":",
                 Desc = "0",
                 Justify = "Center",
                 ImageSize = 0,
             })
+            return p
         end)
         if ok then
             self.stats_labels[key] = par
@@ -286,12 +300,6 @@ function UI:build_recorder_tab()
         add_button(sec_ctrl, "Resume", function()
             local rec = main and main.recorder
             if rec then rec:resume() end
-        end)
-        add_button(sec_ctrl, "Minimizar", function()
-            if self.window and self.window.SetToggleKey then
-                -- minimizar/ocultar a janela
-                pcall(function() self.window:SetVisible(false) end)
-            end
         end)
         add_button(sec_ctrl, "Clean orphans", function()
             print("[UI] Clean orphans solicitado (execucao manual pendente - sem auto-delete por design)")
