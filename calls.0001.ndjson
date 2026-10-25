@@ -1,0 +1,8 @@
+{"ts_header":1792902432,"redaction":{"on":true,"regex_version":"v1"},"_h":1,"mode":"full","file":"calls","schema":{"major":2,"minor":4},"session":"45de4259-d765-4214-9148-0f6f27a6ffc8_1792902429"}
+{"ts":1792902435,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":197,"queue":0}
+{"ts":1792902440,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":287,"queue":0}
+{"ts":1792902448,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":377,"queue":0}
+{"ts":1792902454,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":467,"queue":0}
+{"ts":1792902462,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":557,"queue":0}
+{"ts":1792902467,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":647,"queue":0}
+{"ts":1792902472,"dir":"ctl","kind":"hb","actor_dropped":0,"bytes_written":737,"queue":0}
