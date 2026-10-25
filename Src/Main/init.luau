@@ -257,6 +257,122 @@ function Main:expire_pendings(older_than_ts, observable_map)
 end
 
 -- ============================================================
+-- Ciclo de vida Android / Delta (§12)
+-- ============================================================
+
+-- Instala listeners de teleport, foco perdido e prepara unload.
+function Main:install_lifecycle_listeners()
+    local Players = nil
+    local ok_p, p = pcall(function() return game:GetService("Players") end)
+    if ok_p then Players = p end
+
+    -- OnTeleport: dispara client-side antes da desconexão (§12)
+    if Players and typeof(Players.LocalPlayer) ~= "nil" then
+        local lp = Players.LocalPlayer
+        local ot = lp.OnTeleport
+        if typeof(ot) == "RBXScriptSignal" then
+            ot:Connect(function()
+                pcall(function()
+                    self:_on_teleport()
+                end)
+            end)
+        end
+    end
+
+    -- WindowFocusLost: mobile background / notificacao / chamada (§12)
+    local ok_u, uis = pcall(function() return game:GetService("UserInputService") end)
+    if ok_u and typeof(uis.WindowFocusReleased) == "RBXScriptSignal" then
+        uis.WindowFocusReleased:Connect(function()
+            pcall(function()
+                self:_on_focus_lost()
+            end)
+        end)
+    end
+
+    return true
+end
+
+-- Teleport: flush + end.json + parada limpa. Se queue_on_teleport, requeue loader com parent_session.
+function Main:_on_teleport()
+    if not self.running then return end
+    self.running = false
+    local reason = "teleport"
+
+    -- flush final do Dedup
+    if self.dedup then
+        local deduped = self.dedup:flush()
+        for _, rec in ipairs(deduped) do
+            self.recorder:submit(rec)
+        end
+    end
+
+    -- drena Recorder
+    if self.recorder then
+        pcall(function() self.recorder:stop() end)
+    end
+
+    -- pendentes restantes -> unknown
+    local pending = self.pair:pending_list()
+    for _, rec in ipairs(pending) do
+        if not rec.outcome then
+            rec.outcome = "unknown"
+            rec.outcome_from = "expired_pressure"
+        end
+        self.recorder:submit(rec)
+    end
+    pcall(function() self.recorder:flush() end)
+
+    -- end.json
+    local st = self.recorder:stats()
+    self:close(reason, { stats = st })
+end
+
+-- Foco perdido: flush + end.json, NAO fecha a sessao. Proximo frame retoma.
+function Main:_on_focus_lost()
+    if not self.running then return end
+    local reason = "focus_lost"
+
+    -- flush do Recorder (grava o que tiver na fila)
+    if self.recorder then
+        pcall(function() self.recorder:flush() end)
+    end
+
+    -- end.json com reason focus_lost (sessao nao encerra; pode retomar)
+    local st = self.recorder:stats()
+    self:close(reason, { stats = st })
+end
+
+-- Unload: parar hooks, drenar fila, end.json, desconectar listeners (§12)
+function Main:unload()
+    if not self.running then return end
+    self.running = false
+
+    -- parar hooks (nao instalar novos)
+    if self.hook then
+        -- sem stop() exposto no Hook sintético; em jogo real desconectaria aqui
+    end
+
+    -- drena Recorder
+    if self.recorder then
+        pcall(function() self.recorder:stop() end)
+    end
+
+    -- pendentes restantes -> unknown
+    local pending = self.pair:pending_list()
+    for _, rec in ipairs(pending) do
+        if not rec.outcome then
+            rec.outcome = "unknown"
+            rec.outcome_from = "expired_pressure"
+        end
+        self.recorder:submit(rec)
+    end
+    pcall(function() self.recorder:flush() end)
+
+    local st = self.recorder:stats()
+    self:close("unload", { stats = st })
+end
+
+-- ============================================================
 -- capture_fn: chamado pelo Hook para registrar consts/upvals de uma funcao
 -- ============================================================
 
