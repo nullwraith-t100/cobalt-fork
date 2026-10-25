@@ -54,30 +54,19 @@ local REDACT_TOKENS = {
     jwt = true, bearer = true,
 }
 
--- tokeniza camelCase / snake / PascalCase em tokens minúsculos
-local function tokenize(name)
-    local out = {}
-    local s = tostring(name)
-    -- separa por _ e -
-    for part in s:gmatch("[^_%-]+") do
-        -- separa camelCase/PascalCase: insere _ antes de maiúscula após minúscula dígito
-        local spaced = part:gsub("(%l)(%u)", "%1 %2"):gsub("(%d)(%u)", "%1 %2"):gsub("(%u)(%u%l)", "%1 %2")
-        for tok in spaced:gmatch("%S+") do
-            out[#out + 1] = tok:lower()
-        end
-    end
-    return out
-end
-
--- true se a chave casa exatamente um token sensível (sem substring)
+-- true se a chave casa um token sensivel — token INTEIRO, nunca substring.
+-- "apikey"/"api_key" casam; "KeyCode"/"TokenCount" nao. camelCase so redige
+-- quando o token sensivel e o ultimo segmento (authToken, userPassword).
 function Enrich.key_is_sensitive(name)
-    local toks = tokenize(name)
-    local joined = table.concat(toks, "")
-    for _, tok in ipairs(toks) do
-        if REDACT_TOKENS[tok] then return true end
+    local lower = tostring(name):lower()
+    if REDACT_TOKENS[lower] then return true end
+    for part in lower:gmatch("[^_%-%.]+") do
+        if REDACT_TOKENS[part] then return true end
     end
-    -- "api_key" tokenizado vira {"api","key"} — cobre também a forma colada
-    if REDACT_TOKENS[joined] then return true end
+    local camel = tostring(name):gsub("(%l)(%u)", "%1 %2"):gsub("(%d)(%u)", "%1 %2")
+    local segs = {}
+    for tok in camel:gmatch("%S+") do segs[#segs + 1] = tok:lower() end
+    if #segs > 1 and REDACT_TOKENS[segs[#segs]] then return true end
     return false
 end
 
@@ -126,13 +115,36 @@ local function is_valid_utf8(s)
     return utf8.len(s) ~= nil
 end
 
+local B64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+local function b64_encode(s)
+    local out = {}
+    local i = 1
+    local n = #s
+    while i <= n do
+        local a = string.byte(s, i)
+        local b = string.byte(s, i + 1)
+        local c = string.byte(s, i + 2)
+        local v = a * 65536 + (b or 0) * 256 + (c or 0)
+        local c1 = math.floor(v / 262144) % 64
+        local c2 = math.floor(v / 4096) % 64
+        local c3 = math.floor(v / 64) % 64
+        local c4 = v % 64
+        out[#out + 1] = B64_CHARS:sub(c1 + 1, c1 + 1) .. B64_CHARS:sub(c2 + 1, c2 + 1)
+        if b then out[#out + 1] = B64_CHARS:sub(c3 + 1, c3 + 1) else out[#out + 1] = "=" end
+        if c then out[#out + 1] = B64_CHARS:sub(c4 + 1, c4 + 1) else out[#out + 1] = "=" end
+        i = i + 3
+    end
+    return table.concat(out)
+end
+
+Enrich.b64_encode = b64_encode
+
 local function enc_string(v)
     if is_valid_utf8(v) then
         return { t = "string", v = v, trunc = false }
     end
-    return { t = "string", b64 = v:gsub(".", function(c)
-        return string.format("%02x", string.byte(c))
-    end), bin = true, trunc = false }
+    return { t = "string", b64 = b64_encode(v), bin = true, trunc = false }
 end
 
 local function enc_number(v)
@@ -170,8 +182,7 @@ local function serialize_value(v, depth, seen, max_depth)
     end
     if ty == "CFrame" then
         local pos = { v.X, v.Y, v.Z }
-        local rot = { { v:GetComponents() } }
-        -- GetComponents retorna 12 valores; montamos 3x3 a partir dos 9 primeiros rotacionais
+        -- GetComponents retorna 12 valores; 3x3 a partir dos 9 rotacionais
         local c = { v:GetComponents() }
         local rows = {
             { c[4], c[5], c[6] },
@@ -204,7 +215,7 @@ local function serialize_value(v, depth, seen, max_depth)
     end
     if ty == "Region3int16" then return { t = "Region3int16", min = { v.Min.X, v.Min.Y, v.Min.Z }, max = { v.Max.X, v.Max.Y, v.Max.Z } } end
     if ty == "TweenInfo" then
-        return { t = "TweenInfo", time = v.Time, easing = v.EasingStyle.Value, style = v.EasingDirection.Value, delay = v.DelayTime, repeat = v.RepeatCount, reverse = v.Reverses and 1 or 0 }
+        return { t = "TweenInfo", time = v.Time, easing = v.EasingStyle.Value, style = v.EasingDirection.Value, delay = v.DelayTime, ["repeat"] = v.RepeatCount, reverse = v.Reverses and 1 or 0 }
     end
     if ty == "DateTime" then return { t = "DateTime", unix = v.UnixTimestamp, iso = v:ToIsoDate() } end
     if ty == "Font" then return { t = "Font", family = v.Family, weight = v.Weight.Value, style = v.Style.Value } end
@@ -277,6 +288,24 @@ end
 -- Redação recursiva sobre args/upvals/consts/ret/err
 -- ============================================================
 
+local REDACTION_SALT = ""
+local REDACTION_MIN_SHA_LEN = 16
+
+function Enrich.set_salt(salt)
+    REDACTION_SALT = tostring(salt or "")
+    return true
+end
+
+local function redacted_string(value)
+    local r = { t = "string", redacted = true, trunc = false }
+    if #value >= REDACTION_MIN_SHA_LEN then
+        r.sha = Enrich.hash64(REDACTION_SALT .. value)
+    else
+        r.redacted_short = true
+    end
+    return r
+end
+
 local function redact_node(node, depth, max_depth)
     if type(node) ~= "table" then return node end
     if depth > max_depth then return node end
@@ -284,13 +313,7 @@ local function redact_node(node, depth, max_depth)
     -- string direta
     if node.t == "string" and type(node.v) == "string" then
         if Enrich.value_is_sensitive(node.v) then
-            local redacted = { t = "string", redacted = true, trunc = false }
-            if #node.v >= 16 then
-                redacted.sha = Enrich.hash64(node.v)
-            else
-                redacted.redacted_short = true
-            end
-            return redacted
+            return redacted_string(node.v)
         end
         return node
     end
@@ -309,12 +332,10 @@ local function redact_node(node, depth, max_depth)
             local key_name = nil
             if k and k.t == "string" and type(k.v) == "string" then key_name = k.v end
             if key_name and Enrich.key_is_sensitive(key_name) then
-                -- chave sensível → valor redigido
+                -- chave sensivel -> valor redigido
                 local vnode = v
                 if vnode and vnode.t == "string" and type(vnode.v) == "string" then
-                    local r = { t = "string", redacted = true, trunc = false }
-                    if #vnode.v >= 16 then r.sha = Enrich.hash64(vnode.v) else r.redacted_short = true end
-                    new.map[#new.map + 1] = { k, r }
+                    new.map[#new.map + 1] = { k, redacted_string(vnode.v) }
                 else
                     new.map[#new.map + 1] = { k, { t = "redacted" } }
                 end
