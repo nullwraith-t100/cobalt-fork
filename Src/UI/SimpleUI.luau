@@ -1,7 +1,7 @@
 --[[
-    Cobalt Fork v2.4 — SimpleUI (Fase 9 / §14 DESIGN.md)
-    UI própria em Luau puro, sem dependência externa (Wind UI indisponível no Delta).
-    Aba Recorder: mode, redação, storage, pair/action, controles, probe status, stats ao vivo.
+    Cobalt Fork v2.4 - SimpleUI (Fase 9 / §14 DESIGN.md)
+    UI propria em Luau puro, sem dependencia externa (Wind UI indisponivel no Delta).
+    Aba Recorder: mode, redacao, storage, pair/action, controles, probe status, stats ao vivo.
     Sem hotkey, sem "open folder" (Android).
 ]]
 
@@ -64,7 +64,7 @@ local function new_toggle(parent, label, default, callback)
         Size = UDim2.new(0, 24, 0, 24),
         Position = UDim2.new(0, 0, 0, 2),
         BackgroundColor3 = default and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(60, 60, 60),
-        Text = default and "✓" or "",
+        Text = default and "X" or "",
         TextColor3 = Color3.new(1, 1, 1),
         TextSize = 18,
         Parent = frame,
@@ -83,10 +83,10 @@ local function new_toggle(parent, label, default, callback)
     btn.MouseButton1Click:Connect(function()
         state = not state
         btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(60, 60, 60)
-        btn.Text = state and "✓" or ""
+        btn.Text = state and "X" or ""
         pcall(callback, state)
     end)
-    return { set = function(v) state = v == true; btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(60, 60, 60); btn.Text = state and "✓" or "" end, get = function() return state end }
+    return { set = function(v) state = v == true; btn.BackgroundColor3 = state and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(60, 60, 60); btn.Text = state and "X" or "" end, get = function() return state end }
 end
 
 local function new_input(parent, label, placeholder, default, callback)
@@ -337,7 +337,7 @@ function UI:start()
     create("TextLabel", {
         Size = UDim2.new(1, 0, 0, 32),
         BackgroundColor3 = Color3.fromRGB(40, 40, 50),
-        Text = "Cobalt Fork v2.4 — Recorder",
+        Text = "Cobalt Fork v2.4 - Recorder",
         TextColor3 = Color3.new(1, 1, 1),
         TextSize = 18,
         Font = Enum.Font.GothamBold,
@@ -458,8 +458,8 @@ function UI:build_recorder_tab()
     add_dropdown(sec_mode, "Mode", "mode", { "full", "lite", "dry" }, cfg.mode or "full")
 
     local sec_red = add_section("Redaction")
-    add_toggle(sec_red, "Redação ativa", "redaction_on", true)
-    add_input(sec_red, "Regex de redação", "redaction_regex", "^(token|apikey|...)", cfg.redaction_regex)
+    add_toggle(sec_red, "Redacao ativa", "redaction_on", true)
+    add_input(sec_red, "Regex de redacao", "redaction_regex", "^(token|apikey|...)", cfg.redaction_regex)
     add_input(sec_red, "Min sha length", "redaction_min_sha_len", "16", tostring(cfg.redaction_min_sha_len or 16), "number")
 
     local sec_st = add_section("Storage")
@@ -484,20 +484,20 @@ function UI:build_recorder_tab()
         if rec then rec:resume() end
     end)
     add_button(sec_ctrl, "Clean orphans", function()
-        print("[UI] Clean orphans solicitado (execução manual pendente — sem auto-delete por design)")
+        print("[UI] Clean orphans solicitado (execucao manual pendente - sem auto-delete por design)")
     end)
 
     local sec_probe = add_section("Probe status")
     local probe = self:probe_status()
     if probe then
         add_stat("executor"); self.stats_labels.executor:set(tostring(probe.executor or "?"))
-        add_stat("versão"); self.stats_labels.versão:set(tostring(probe.executor_version or "?"))
+        add_stat("versao"); self.stats_labels.versao:set(tostring(probe.executor_version or "?"))
         if probe.results then
             for nome, res in pairs(probe.results) do
                 local status = "?"
                 if res.ok == false then status = "FALHOU"
-                elseif res.exists == false then status = "INDISPONÍVEL"
-                elseif res.available == false then status = "INDISPONÍVEL"
+                elseif res.exists == false then status = "INDISPONIVEL"
+                elseif res.available == false then status = "INDISPONIVEL"
                 else status = "OK" end
                 add_stat(nome); self.stats_labels[nome]:set(status)
             end
@@ -506,7 +506,7 @@ function UI:build_recorder_tab()
             add_stat("bytecode_hash"); self.stats_labels.bytecode_hash:set(tostring(probe.recommended_config.bytecode_hash or "?"))
         end
     else
-        add_stat("probe"); self.stats_labels.probe:set("probe.json não encontrado")
+        add_stat("probe"); self.stats_labels.probe:set("probe.json nao encontrado")
     end
 
     local sec_stats = add_section("Stats ao vivo")
