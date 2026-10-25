@@ -1,14 +1,15 @@
 --[[
-    Cobalt Fork v2.4 — Loader FINAL com Wind UI (Fase 9 / §14 DESIGN.md)
+    Cobalt Fork v2.4 — Loader FINAL com UI própria (Luau puro, sem dependência externa)
     Inicia o fork completo e abre a aba Recorder com controles de config,
-    pause/resume, stats ao vivo e probe status.
+    pause/resume, stats ao vivo e probe status. Copia probe.json para Cobalt/.
 
     Uso no Delta:
       loadstring(game:HttpGet("https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/tests/run_final.luau"))()
 ]]
 
 local COMPLETE_URL = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/Complete/init.luau"
-local WINDUI_URL   = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/UI/WindUI.luau"
+local UI_URL       = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/Src/UI/SimpleUI.luau"
+local PROBE_URL    = "https://raw.githubusercontent.com/nullwraith-t100/cobalt-fork/main/docs/probe.json"
 
 local function fetch_module(url)
     local ok, src = pcall(function() return game:HttpGet(url) end)
@@ -29,41 +30,60 @@ local function fetch_module(url)
     return mod
 end
 
--- 1. carrega Wind UI
-local windui, werr = fetch_module(WINDUI_URL)
-if not windui then
-    return warn("[final] Wind UI nao carregou: " .. tostring(werr))
+local function fetch_text(url)
+    local ok, src = pcall(function() return game:HttpGet(url) end)
+    if not ok or type(src) ~= "string" then
+        return nil, "HttpGet falhou: " .. tostring(src)
+    end
+    return src
 end
 
--- 2. carrega Complete (entry point do fork)
+-- 1. copia probe.json para Cobalt/ (obrigatório antes do Recorder abrir)
+local probe_src, perr = fetch_text(PROBE_URL)
+if probe_src then
+    local ok, err = pcall(writefile, "Cobalt/probe.json", probe_src)
+    if ok then
+        print("[final] probe.json copiado para Cobalt/probe.json")
+    else
+        print("[final] falha ao gravar probe.json: " .. tostring(err))
+    end
+else
+    print("[final] nao baixou probe.json: " .. tostring(perr))
+end
+
+-- 2. carrega a UI própria
+local ui_mod, uierr = fetch_module(UI_URL)
+if not ui_mod then
+    return warn("[final] UI nao carregou: " .. tostring(uierr))
+end
+
+-- 3. carrega Complete (entry point do fork)
 local complete, cerr = fetch_module(COMPLETE_URL)
 if not complete then
     return warn("[final] Complete nao carregou: " .. tostring(cerr))
 end
 
--- 3. instancia Complete
+-- 4. instancia Complete
 local ok2, complete_inst = pcall(function() return complete.new() end)
 if not ok2 then
     return warn("[final] complete.new falhou: " .. tostring(complete_inst))
 end
 
--- 4. instancia UI Wind UI (passa a instância Complete como "main")
-local UI = windui
-local ok3, ui = pcall(function() return UI.new(complete_inst) end)
+-- 5. instancia UI (passa a instância Complete)
+local ok3, ui = pcall(function() return ui_mod.new(complete_inst) end)
 if not ok3 then
     return warn("[final] UI.new falhou: " .. tostring(ui))
 end
 
--- 5. start da janela UI
+-- 6. start da janela UI
 local ok4, win_err = ui:start()
 if not ok4 then
     return warn("[final] UI:start falhou: " .. tostring(win_err))
 end
 
-print("[final] Cobalt Fork v2.4 com Wind UI iniciado.")
-print("[final] Janela Recorder aberta. Ajuste config e clique para iniciar/sessao.")
+print("[final] Cobalt Fork v2.4 iniciado. Janela Recorder aberta.")
 
--- 6. loop de stats ao vivo (atualiza a cada 2 s enquanto a janela estiver visível)
+-- 7. loop de stats ao vivo (atualiza a cada 2 s enquanto a janela estiver visível)
 task.spawn(function()
     while ui.visible do
         pcall(function() ui:update_stats() end)
